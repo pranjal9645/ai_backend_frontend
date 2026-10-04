@@ -8,10 +8,15 @@
 import SwiftUI
 
 @main
-struct AIKnowledgePlatform1App: App {
+struct AIKnowledgePlatform1App: App
+{
+    @StateObject private var appState = AppState()
+    
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            
+            RootView()
+                .environmentObject(appState)
         }
     }
 }
