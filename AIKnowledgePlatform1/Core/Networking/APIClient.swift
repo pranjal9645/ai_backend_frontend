@@ -15,6 +15,8 @@ final class APIClient
     
     private let session : URLSession
     
+    private let tokenStore = TokenStore.shared
+    
     private init()
     {
         self.session = .shared
@@ -32,6 +34,11 @@ final class APIClient
         for (key , value) in request.headers
         {
             urlRequest.setValue(value, forHTTPHeaderField: key)
+        }
+        
+        if let token = tokenStore.readToken()
+        {
+            urlRequest.setValue("Bearer \(token)", forHTTPHeaderField:"Authorization")
         }
         
         let (data , response) : (Data , URLResponse)

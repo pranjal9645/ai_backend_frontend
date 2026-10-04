@@ -17,7 +17,9 @@ struct RootView : View {
             switch appState.phase
           {
             case .unauthenticated:
-                Text("Login Screen")
+                
+                LoginView(appState: appState)
+                
             case .authenticated:
                 Text("Main App")
           }
