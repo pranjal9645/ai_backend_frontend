@@ -11,7 +11,8 @@ enum APIError : Error
 {
     case indvalidURL
     case invalidResponse
-    case httpError(statusCode : Int)
+    case httpError(statusCode : Int , message : String?)
+    case authenticationFailed
     case decodingError
     case encodingError
     case networkError(Error)

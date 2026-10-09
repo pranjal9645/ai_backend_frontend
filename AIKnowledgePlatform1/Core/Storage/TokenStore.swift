@@ -8,16 +8,19 @@
 import Foundation
 import Security
 
-final class TokenStore
+nonisolated
+final class TokenStore : Sendable
 {
     static let shared = TokenStore()
     
     private let service =  "com.aiknowledgeplatform.auth"
-    private let account = "accessToken"
+    private let accessTokenAccount = "accessToken"
+    private let refreshTokenAccount = "refreshToken"
+    
     
     private init(){}
     
-    func save(token : String) throws
+    private func save(token : String , account : String) throws
     {
         let data = Data(token.utf8)
         
@@ -44,7 +47,7 @@ final class TokenStore
         }
     }
     
-    func readToken() -> String?
+    private func readToken(account : String) -> String?
     {
         let query: [String: Any] = [
                   kSecClass as String: kSecClassGenericPassword,
@@ -65,15 +68,42 @@ final class TokenStore
         return String(data: data, encoding: .utf8)
     }
     
-    func deleteToken()
+    func deleteAllTokens()
     {
-        let query: [String: Any] = [
-                  kSecClass as String: kSecClassGenericPassword,
-                  kSecAttrService as String: service,
-                  kSecAttrAccount as String: account
-              ]
-              
-        SecItemDelete(query as CFDictionary)
+        let accounts = [
+            accessTokenAccount , refreshTokenAccount
+        ]
+        
+        for account in accounts {
+            
+            let query: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: service,
+                kSecAttrAccount as String: account
+            ]
+            
+            SecItemDelete(query as CFDictionary)
+        }
+    }
+    
+    func saveAccessToken(_ token : String) throws
+    {
+        try save(token: token , account : accessTokenAccount)
+    }
+    
+    func readAccessToken() -> String?
+    {
+        return readToken(account : accessTokenAccount)
+    }
+    
+    func saveRefreshToken(_ token : String) throws
+    {
+        try save(token: token, account: refreshTokenAccount)
+    }
+    
+    func readRefreshToken() -> String?
+    {
+        readToken(account: refreshTokenAccount)
     }
 }
 

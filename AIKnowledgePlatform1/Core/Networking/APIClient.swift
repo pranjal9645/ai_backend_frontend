@@ -22,7 +22,7 @@ final class APIClient
         self.session = .shared
     }
     
-    func send<T : Decodable>(_ request : APIRequest) async throws -> T
+    func send<T : Decodable>(_ request : APIRequest , isRetry : Bool = false) async throws -> T
     {
         let url = baseURL.appendingPathComponent(request.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")))
         
@@ -36,9 +36,19 @@ final class APIClient
             urlRequest.setValue(value, forHTTPHeaderField: key)
         }
         
-        if let token = tokenStore.readToken()
-        {
-            urlRequest.setValue("Bearer \(token)", forHTTPHeaderField:"Authorization")
+        // Attach the access token only when the request's authentication policy allows it.
+        switch request.authenticationPolicy {
+        case .none:
+            break
+        case .optional , .required:
+            
+            if let token = tokenStore.readAccessToken()
+            {
+              urlRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            }else if request.authenticationPolicy == .required
+            {
+                throw APIError.authenticationFailed
+            }
         }
         
         let (data , response) : (Data , URLResponse)
@@ -56,9 +66,40 @@ final class APIClient
             throw APIError.invalidResponse
         }
         
+        // Handle unauthorized responses according to the request's explicit retry policy.
+        if httpResponse.statusCode == 401
+        {
+            switch request.unauthorizedRetryPolicy {
+            case .never:
+                
+                let message = extractErrorMessage(from: data)
+                
+                throw APIError.httpError(statusCode: 401, message: message)
+                
+            case .refreshAccessTokenOnce:
+                
+                if isRetry
+                {
+                    throw APIError.authenticationFailed
+                }
+                
+                do
+                {
+                    _ = try await AuthManager.shared.refreshAccessToken()
+                }catch
+                {
+                    // Preserve the original refresh error.
+                    throw APIError.networkError(error)
+                }
+                
+                return try await send(request , isRetry: true)
+            }
+        }
+        
         guard 200..<300 ~= httpResponse.statusCode else
         {
-            throw APIError.httpError(statusCode: httpResponse.statusCode)
+            let message = extractErrorMessage(from : data)
+            throw APIError.httpError(statusCode: httpResponse.statusCode , message: message)
         }
         
         do
@@ -69,6 +110,20 @@ final class APIClient
             throw APIError.decodingError
         }
         
+    }
+    
+    private func extractErrorMessage(from data : Data) -> String?
+    {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String : Any] else
+        {
+            return nil
+        }
         
+        if let detail = json["detail"] as? String
+        {
+            return detail
+        }
+        
+        return nil
     }
 }
