@@ -35,17 +35,8 @@ struct RootView : View {
                 }
                 
             case .authenticated:
-                VStack(spacing : 10)
-                {
-                    Text("Main App")
+                    MainTabView(appState: appState)
                     
-                    Button("LogOut")
-                    {
-                        AuthViewModel(appState: appState).logOut()
-                    }.buttonStyle(.borderedProminent)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 52)
-                }
               
           }
         }.task {

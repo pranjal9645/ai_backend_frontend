@@ -116,7 +116,7 @@ private extension ResetPasswordView
 private extension ResetPasswordView
 {
     var resetButton : some View
-    {
+    {  VStack(spacing: 20){
         Button
         {
             focusedField = nil
@@ -146,8 +146,17 @@ private extension ResetPasswordView
             .background(Color.accentColor)
             .clipShape(RoundedRectangle(cornerRadius: 14))
         }
-        .disabled(viewModel.isLoading)
-        .padding(.top , 24)
+        .disabled(viewModel.isLoading || viewModel.cooldown.isActive)
+        .padding(.top , 25)
+        
+        if viewModel.cooldown.isActive
+        {
+            Text("Please try again in \(viewModel.cooldown.remainingSeconds) seconds.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
+        
     }
 }
 
@@ -227,4 +236,8 @@ private extension ResetPasswordView
         }
         .padding(.horizontal , 24)
     }
+}
+
+#Preview {
+    ResetPasswordView(token: "iejj")
 }

@@ -129,31 +129,40 @@ private extension LoginView
 private extension LoginView {
 
     var loginButton: some View {
-        Button {
-            Task {
-                await viewModel.login()
-            }
-        } label: {
-
-            ZStack {
-
-                Text("Login")
-                    .font(.headline)
-                    .opacity(
-                        viewModel.isLoading ? 0 : 1
-                    )
-
-                if viewModel.isLoading {
-                    ProgressView()
-                        .tint(.white)
+        VStack(spacing : 20){
+            Button {
+                Task {
+                    await viewModel.login()
                 }
+            } label: {
+                
+                ZStack {
+                    
+                    Text("Login")
+                        .font(.headline)
+                        .opacity(
+                            viewModel.isLoading ? 0 : 1
+                        )
+                    
+                    if viewModel.isLoading {
+                        ProgressView()
+                            .tint(.white)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 52)
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: 52)
+            .buttonStyle(.borderedProminent)
+            .disabled(viewModel.isLoading || viewModel.cooldown.isActive)
+            .padding(.top, 28)
+            
+            if viewModel.cooldown.isActive
+            {
+                Text("Please try again in \(viewModel.cooldown.remainingSeconds) seconds.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+            }
         }
-        .buttonStyle(.borderedProminent)
-        .disabled(viewModel.isLoading)
-        .padding(.top, 28)
     }
 }
 

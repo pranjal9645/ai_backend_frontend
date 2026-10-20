@@ -13,6 +13,7 @@ struct APIRequest
     let method : HTTPMethod
     let body : Data?
     let headers : [String : String]
+    let queryItems : [URLQueryItem]
     let authenticationPolicy : AuthenticationPolicy
     let unauthorizedRetryPolicy : UnauthorizedRetryPolicy
     
@@ -37,11 +38,12 @@ struct APIRequest
         case  refreshAccessTokenOnce
     }
    
-    init(path: String, method: HTTPMethod = .GET, body: Data? = nil , headers: [String : String] = [:] ,  authenticationPolicy: AuthenticationPolicy, unauthorizedRetryPolicy: UnauthorizedRetryPolicy) {
+    init(path: String, method: HTTPMethod = .GET, body: Data? = nil , headers: [String : String] = [:] , queryItems : [URLQueryItem] = [],  authenticationPolicy: AuthenticationPolicy, unauthorizedRetryPolicy: UnauthorizedRetryPolicy) {
         self.path = path
         self.method = method
         self.body = body
         self.headers = headers
+        self.queryItems = queryItems
         self.authenticationPolicy = authenticationPolicy
         self.unauthorizedRetryPolicy = unauthorizedRetryPolicy 
     }

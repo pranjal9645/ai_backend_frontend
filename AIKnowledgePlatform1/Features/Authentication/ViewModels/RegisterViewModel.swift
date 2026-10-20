@@ -23,14 +23,24 @@ final class RegisterViewModel : ObservableObject
     private let authService = AuthService.shared
     private let appState : AppState
     
+    let cooldown = RateLimitCooldown()
+    private var cancellables = Set<AnyCancellable>()
+    
     init(appState : AppState)
     {
         self.appState = appState
+        
+        cooldown.objectWillChange
+            .sink{ [weak self] _ in
+                
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
     }
     
     func register() async
     {
-        guard !isLoading else
+        guard !isLoading , !cooldown.isActive else
         {
           return
         }
@@ -97,12 +107,14 @@ final class RegisterViewModel : ObservableObject
         do
         {
             try await authService.register(name: name, email: email, password: password)
-            
+            name = ""
+            email = ""
+            password = ""
             appState.phase = .authenticated
         }catch let error as APIError
         {
             switch error {
-            case .indvalidURL:
+            case .invalidURL:
                 errorMessage = "Unable to connect to the server."
             case .invalidResponse:
                 errorMessage =   "The server returned an invalid response."
@@ -118,6 +130,9 @@ final class RegisterViewModel : ObservableObject
                     
                 case 422:
                     errorMessage = message ?? "Please check your information."
+                    
+                case 429:
+                    errorMessage = message ?? "Too many requests . Please try again later."
                     
                 case 500...599:
                     errorMessage = "Something went wrong on the server."
@@ -135,6 +150,11 @@ final class RegisterViewModel : ObservableObject
                 
             case .authenticationFailed:
                 errorMessage = "Failed to create an account."
+            case .rateLimitExceeded(retryAfter: let retryAfter , message: let message):
+                errorMessage = message
+                cooldown.start(seconds: retryAfter)
+            case .serviceUnavailable(message: let message):
+                errorMessage = message
             }
         }catch
         {

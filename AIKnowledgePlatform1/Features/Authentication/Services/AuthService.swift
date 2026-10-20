@@ -108,4 +108,11 @@ final class AuthService
         let _ : LogoutResponse = try await apiClient.send(request)
     }
    
+    
+    func fetchUser() async throws -> UserResponse {
+        
+        let request = APIRequest(path : "users/me" , method: .GET , authenticationPolicy: .required , unauthorizedRetryPolicy: .refreshAccessTokenOnce)
+        
+        return try await APIClient.shared.send(request)
+    }
 }

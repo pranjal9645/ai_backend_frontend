@@ -30,7 +30,12 @@ final class TokenStore : Sendable
             kSecAttrAccount as String : account
         ]
         
-        SecItemDelete(query as CFDictionary)
+       let deleteStatus =  SecItemDelete(query as CFDictionary)
+        
+        guard deleteStatus == errSecSuccess  || deleteStatus == errSecItemNotFound else
+        {
+            throw TokenStoreError.saveFailed(deleteStatus)
+        }
         
         let attributes : [String : Any] = [
             kSecClass as String: kSecClassGenericPassword,

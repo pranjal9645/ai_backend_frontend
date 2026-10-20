@@ -130,7 +130,14 @@ private extension ForgotPasswordView
                 .frame(height: 52)
             }
             .buttonStyle(.borderedProminent)
-            .disabled(viewModel.isLoading)
+            .disabled(viewModel.isLoading || viewModel.cooldown.isActive)
+            
+            if viewModel.cooldown.isActive
+            {
+                Text("Please try again in \(viewModel.cooldown.remainingSeconds) seconds.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+            }
             
         }
     }

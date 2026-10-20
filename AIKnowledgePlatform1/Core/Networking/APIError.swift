@@ -7,12 +7,13 @@
 
 import Foundation
 
-enum APIError : Error
-{
-    case indvalidURL
+enum APIError: Error {
+    case invalidURL
     case invalidResponse
-    case httpError(statusCode : Int , message : String?)
+    case httpError(statusCode: Int, message: String?)
     case authenticationFailed
+    case rateLimitExceeded(retryAfter: TimeInterval?, message: String)
+    case serviceUnavailable(message: String)
     case decodingError
     case encodingError
     case networkError(Error)

@@ -18,16 +18,26 @@ final class ResetPasswordViewModel : ObservableObject
     @Published var errorMessage : String?
     @Published var didResetPassword = false
     
+    let cooldown = RateLimitCooldown()
+    private var cancellables = Set<AnyCancellable>()
+    
     private let token : String
     
     init(token : String)
     {
         self.token = token
+        
+        cooldown.objectWillChange
+            .sink{ [weak self] _ in
+                
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
     }
     
     func resetPassword() async
     {
-        guard !isLoading else
+        guard !isLoading  , !cooldown.isActive else
         {
             return
         }
@@ -74,7 +84,7 @@ final class ResetPasswordViewModel : ObservableObject
         }catch let error as APIError
         {
             switch error {
-            case .indvalidURL:
+            case .invalidURL:
                 errorMessage =  "Unable to connect to the server."
             case .invalidResponse:
                 errorMessage =   "The server returned an invalid response."
@@ -93,6 +103,9 @@ final class ResetPasswordViewModel : ObservableObject
                      
                  case 422:
                      errorMessage =    message ?? "Please check your password."
+                    
+                 case 429:
+                     errorMessage = message ?? "Too many requests . Please try again later."
                      
                  case 500...599:
                      errorMessage =  "Something went wrong on the server."
@@ -109,10 +122,17 @@ final class ResetPasswordViewModel : ObservableObject
                 errorMessage = "Unable to prepare the reset request."
             case .networkError:
                 errorMessage =  "Unable to connect to the server."
+                
+            case .rateLimitExceeded(retryAfter:  let retryAfter , message: let message):
+                errorMessage = message
+                cooldown.start(seconds: retryAfter)
+            case .serviceUnavailable(message: let message):
+                errorMessage = message
             }
         }catch
         {
             errorMessage =  "Something went wrong. Please try again."
         }
     }
+    
 }

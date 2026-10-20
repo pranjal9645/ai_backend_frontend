@@ -41,7 +41,7 @@ final class AppState : ObservableObject
     
     func restoreSession()
     {
-        if tokenStore.readAccessToken() != nil{
+        if tokenStore.readAccessToken() != nil {
             phase = .authenticated
         }else
         {

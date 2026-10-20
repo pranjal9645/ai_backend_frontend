@@ -24,7 +24,23 @@ final class APIClient
     
     func send<T : Decodable>(_ request : APIRequest , isRetry : Bool = false) async throws -> T
     {
-        let url = baseURL.appendingPathComponent(request.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")))
+        let path = request.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        
+        let trailingSlash = request.path.hasSuffix("/") ? "/" : ""
+        
+        guard var components = URLComponents(url : baseURL , resolvingAgainstBaseURL: false) else
+        {
+            throw APIError.invalidURL
+        }
+        
+        components.path = "/\(path)\(trailingSlash)"
+        components.queryItems = request.queryItems.isEmpty ? nil : request.queryItems
+        
+        guard let url = components.url else
+        {
+            throw APIError.invalidURL
+        }
+       
         
         var urlRequest = URLRequest(url: url)
         
@@ -42,13 +58,20 @@ final class APIClient
             break
         case .optional , .required:
             
-            if let token = tokenStore.readAccessToken()
+            guard let token = tokenStore.readAccessToken() , !token.isEmpty else
             {
-              urlRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-            }else if request.authenticationPolicy == .required
-            {
-                throw APIError.authenticationFailed
+                if request.authenticationPolicy == .required
+                {
+                    throw APIError.authenticationFailed
+                }
+                break
             }
+            
+            urlRequest.setValue(
+                  "Bearer \(token)",
+                  forHTTPHeaderField: "Authorization"
+              )
+
         }
         
         let (data , response) : (Data , URLResponse)
@@ -56,6 +79,7 @@ final class APIClient
         do
         {
             (data , response) = try await session.data(for: urlRequest)
+            
         }catch
         {
             throw APIError.networkError(error)
@@ -66,15 +90,16 @@ final class APIClient
             throw APIError.invalidResponse
         }
         
+        let statusCode = httpResponse.statusCode
+        let errorDetails = extractErrorDeatils(from: data)
+        
         // Handle unauthorized responses according to the request's explicit retry policy.
-        if httpResponse.statusCode == 401
+        if statusCode == 401
         {
             switch request.unauthorizedRetryPolicy {
             case .never:
                 
-                let message = extractErrorMessage(from: data)
-                
-                throw APIError.httpError(statusCode: 401, message: message)
+                throw APIError.httpError(statusCode: 401, message: errorDetails.message)
                 
             case .refreshAccessTokenOnce:
                 
@@ -86,7 +111,12 @@ final class APIClient
                 do
                 {
                     _ = try await AuthManager.shared.refreshAccessToken()
-                }catch
+                }
+                catch let error as APIError
+                {
+                    throw error
+                }
+                catch
                 {
                     // Preserve the original refresh error.
                     throw APIError.networkError(error)
@@ -96,10 +126,26 @@ final class APIClient
             }
         }
         
+        // Handle rate limiting without refreshing tokens or retrying.
+        if statusCode == 429
+        {
+            let retryAfter = parseRetryAfter(httpResponse.value(forHTTPHeaderField: "Retry-After"))
+            
+            let message = errorDetails.message ?? "Too many requests. Please try again later."
+            
+            throw APIError.rateLimitExceeded(retryAfter: retryAfter, message: message)
+        }
+        
+        // A rate-limiting service outage is not an authentication failure.
+        
+        if statusCode == 503
+        {
+            throw APIError.serviceUnavailable(message: errorDetails.message ?? "The service is temporarily unavailable. Please try again later.")
+        }
+        
         guard 200..<300 ~= httpResponse.statusCode else
         {
-            let message = extractErrorMessage(from : data)
-            throw APIError.httpError(statusCode: httpResponse.statusCode , message: message)
+            throw APIError.httpError(statusCode: httpResponse.statusCode , message: errorDetails.message)
         }
         
         do
@@ -112,18 +158,50 @@ final class APIClient
         
     }
     
-    private func extractErrorMessage(from data : Data) -> String?
+    private func extractErrorDeatils(from data : Data) -> (code: String? , message : String?)
     {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String : Any] else
         {
-            return nil
+            return (nil , nil)
+        }
+        
+        if let error = json["error"] as? [String : Any]
+        {
+            let code = error["code"] as? String
+            let message = error["message"] as? String
+            
+            return (code , message)
         }
         
         if let detail = json["detail"] as? String
         {
-            return detail
+            return (nil , detail)
         }
         
-        return nil
+        return (nil , nil)
+    }
+    
+    private func parseRetryAfter(_ headerValue : String?) -> TimeInterval?
+    {
+        guard let headerValue else
+        {
+            return nil
+        }
+        
+        if let seconds = TimeInterval(headerValue) , seconds >= 0 {
+            return seconds
+        }
+        
+        let dateFormatter = DateFormatter()
+        dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+        dateFormatter.timeZone = TimeZone(secondsFromGMT: 0)
+        dateFormatter.dateFormat = "EEE',' dd MMM yyyy HH':'mm':'ss z"
+        
+        guard let date = dateFormatter.date(from: headerValue) else
+        {
+            return nil
+        }
+        
+        return max(0 , date.timeIntervalSinceNow)
     }
 }
